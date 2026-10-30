@@ -61,7 +61,15 @@ input,select{background:var(--card);border:1px solid var(--bd);border-radius:8px
 </style>
 </head>
 <body>
-<div class="w">
+<div class="w" id="login" hidden>
+  <div class="c vz" style="margin-top:18vh">
+    <h1 style="color:var(--tx)">Minhas Finanças</h1>
+    <p>Entre para guardar e sincronizar seus dados entre o celular e o PC.</p>
+    <button class="p" id="entrar">Entrar com Google</button>
+    <p id="erro" class="neg"></p>
+  </div>
+</div>
+<div class="w" id="app" hidden>
   <div class="top">
     <h1>Minhas Finanças</h1>
     <div class="mes"><button id="ant">‹</button><b id="mlabel"></b><button id="prox">›</button></div>
@@ -91,19 +99,54 @@ input,select{background:var(--card);border:1px solid var(--bd);border-radius:8px
   <div class="ft">
     <button id="exp">Exportar backup</button>
     <button id="imp">Importar backup</button>
+    <button id="sair">Sair</button>
+    <span id="quem" style="color:var(--mut);align-self:center;font-size:13px"></span>
     <input id="file" type="file" accept="application/json" hidden>
   </div>
 </div>
 
-<script>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {getAuth,onAuthStateChanged,signInWithPopup,GoogleAuthProvider,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {initializeFirestore,getFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,updateDoc,deleteDoc,onSnapshot,writeBatch} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+// COLE AQUI a configuração do seu app web (Firebase > Configurações do projeto > Seus apps)
+const firebaseConfig={
+  apiKey:"COLE_AQUI",
+  authDomain:"SEU-PROJETO.firebaseapp.com",
+  projectId:"SEU-PROJETO",
+  appId:"COLE_AQUI"
+};
+const app=initializeApp(firebaseConfig);
+const auth=getAuth(app);
+let db;
+try{db=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})})}catch(e){db=getFirestore(app)}
+
 (function(){
-  var KEY="financas:v1", itens=[], filtro="all", aba="lanc";
+  var KEY="financas:v1", itens=[], filtro="all", aba="lanc", col=null, uid=null, unsub=null;
   var hoje=new Date(), mes=hoje.getFullYear()+"-"+String(hoje.getMonth()+1).padStart(2,"0");
   var NOMES={in:"Recebimento",out:"Gasto",debt:"Dívida"};
   var $=function(id){return document.getElementById(id)};
 
-  function load(){try{var r=localStorage.getItem(KEY);itens=r?JSON.parse(r):[]}catch(e){itens=[]}if(!Array.isArray(itens))itens=[]}
-  function save(){try{localStorage.setItem(KEY,JSON.stringify(itens))}catch(e){}}
+  function legado(){try{var r=JSON.parse(localStorage.getItem(KEY)||"[]");return Array.isArray(r)?r:[]}catch(e){return[]}}
+  function falha(e){console.error(e);alert("Não foi possível salvar: "+((e&&e.code)||e))}
+  function valido(i){return i&&["in","out","debt"].indexOf(i.tipo)>=0&&typeof i.valor==="number"&&i.valor>=0&&typeof i.desc==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(i.data)}
+  function enviar(arr){
+    var l=arr.filter(valido).map(function(i){
+      var id=String(i.id||"").replace(/[^\w-]/g,"")||(Date.now().toString(36)+Math.random().toString(36).slice(2,7));
+      return{id:id,tipo:i.tipo,valor:i.valor,desc:i.desc.slice(0,200),data:i.data,ok:!!i.ok};
+    });
+    var ps=[];
+    for(var k=0;k<l.length;k+=400){var b=writeBatch(db);l.slice(k,k+400).forEach(function(i){b.set(doc(col,i.id),i)});ps.push(b.commit())}
+    return Promise.all(ps).catch(falha).then(function(){return l.length});
+  }
+  function migrar(){
+    var l=legado(),f=KEY+":migrado:"+uid,feito=null;
+    try{feito=localStorage.getItem(f)}catch(e){}
+    if(!l.length||feito)return;
+    try{localStorage.setItem(f,"1")}catch(e){}
+    if(confirm("Encontrei "+l.length+" lançamentos salvos neste aparelho. Enviar para a nuvem?"))enviar(l);
+  }
   function brl(n){return n.toLocaleString("pt-BR",{style:"currency",currency:"BRL"})}
   function fdata(s){var p=s.split("-");return p[2]+"/"+p[1]}
   function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
@@ -174,17 +217,18 @@ input,select{background:var(--card);border:1px solid var(--bd);border-radius:8px
     e.preventDefault();
     var v=parseFloat($("valor").value);
     if(!(v>=0)||!$("desc").value.trim()||!$("data").value)return;
-    itens.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),tipo:$("tipo").value,valor:v,desc:$("desc").value.trim(),data:$("data").value,ok:false});
-    save();$("valor").value="";$("desc").value="";
+    var n={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),tipo:$("tipo").value,valor:v,desc:$("desc").value.trim(),data:$("data").value,ok:false};
+    setDoc(doc(col,n.id),n).catch(falha);
+    $("valor").value="";$("desc").value="";
     mes=$("data").value.slice(0,7);render();
   });
   $("lista").addEventListener("click",function(e){
     var d=e.target.getAttribute("data-del");
-    if(d){itens=itens.filter(function(i){return i.id!==d});save();render()}
+    if(d){deleteDoc(doc(col,d)).catch(falha)}
   });
   $("lista").addEventListener("change",function(e){
     var id=e.target.getAttribute("data-id");
-    if(id){itens.forEach(function(i){if(i.id===id)i.ok=e.target.checked});save();render()}
+    if(id){updateDoc(doc(col,id),{ok:e.target.checked}).catch(falha)}
   });
   $("filtros").addEventListener("click",function(e){var f=e.target.getAttribute("data-f");if(f){filtro=f;render()}});
   function move(n){var p=mes.split("-"),d=new Date(+p[0],+p[1]-1+n,1);mes=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");render()}
@@ -198,12 +242,35 @@ input,select{background:var(--card);border:1px solid var(--bd);border-radius:8px
   $("file").onchange=function(e){
     var f=e.target.files[0];if(!f)return;
     var r=new FileReader();
-    r.onload=function(){try{var d=JSON.parse(r.result);if(Array.isArray(d)){itens=d;save();render()}}catch(x){}};
+    r.onload=function(){try{var d=JSON.parse(r.result);if(Array.isArray(d))enviar(d)}catch(x){}};
     r.readAsText(f);
   };
 
   $("data").value=hoje.getFullYear()+"-"+String(hoje.getMonth()+1).padStart(2,"0")+"-"+String(hoje.getDate()).padStart(2,"0");
-  load();render();
+  $("entrar").onclick=function(){
+    $("erro").textContent="";
+    signInWithPopup(auth,new GoogleAuthProvider()).catch(function(e){$("erro").textContent="Não foi possível entrar: "+(e.code||e)});
+  };
+  $("sair").onclick=function(){signOut(auth)};
+  if(firebaseConfig.apiKey.indexOf("COLE")===0){
+    $("login").hidden=false;$("erro").textContent="Falta colar o firebaseConfig no início do script do index.html.";
+  }else{
+    onAuthStateChanged(auth,function(u){
+      if(unsub){unsub();unsub=null}
+      if(u){
+        uid=u.uid;col=collection(db,"users",uid,"lancamentos");
+        $("quem").textContent=u.email||"";
+        $("login").hidden=true;$("app").hidden=false;
+        unsub=onSnapshot(col,function(sn){
+          itens=sn.docs.map(function(d){return d.data()}).filter(valido);render();
+        },function(e){console.error(e);$("lista").innerHTML='<div class="vz neg">Erro ao ler os dados: '+esc(e.code||e)+'</div>'});
+        migrar();
+      }else{
+        uid=null;col=null;itens=[];
+        $("app").hidden=true;$("login").hidden=false;
+      }
+    });
+  }
   if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
 })();
 </script>

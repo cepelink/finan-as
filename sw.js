@@ -1,4 +1,4 @@
-const CACHE = "financas-v2";
+const CACHE = "financas-v3";
 const ARQUIVOS = ["./", "./index.html", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARQUIVOS)));
@@ -10,6 +10,8 @@ self.addEventListener("activate", e => {
 });
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
+  // Só arquivos do próprio site; Firebase/Google passam direto (não podem ser interceptados)
+  if (new URL(e.request.url).origin !== self.location.origin) return;
   e.respondWith(
     fetch(e.request).then(r => {
       const cp = r.clone();

@@ -1,19 +1,7 @@
 # Minhas Finanças
 
-App web (PWA) para controle mensal de recebimentos, gastos e dívidas.
-Os dados ficam salvos no navegador de cada aparelho (localStorage).
-Use Exportar/Importar backup para levar os dados entre aparelhos.
+App web (PWA) hospedado no GitHub Pages. Os dados ficam no Firestore (Firebase),
+separados por usuário (login com Google) e sincronizados entre aparelhos.
 
-## Publicar no Firebase Hosting
-    npm i -g firebase-tools
-    firebase login
-    firebase init hosting   # public dir: . | SPA: não | não sobrescrever index.html
-    firebase deploy
-
-## Subir no GitHub
-    git init
-    git add .
-    git commit -m "Primeira versão"
-    git branch -M main
-    git remote add origin https://github.com/SEU-USUARIO/financas.git
-    git push -u origin main
+Configuração: veja o início do <script> no index.html (firebaseConfig)
+e cole o conteúdo de firestore.rules em Firestore > Regras.
