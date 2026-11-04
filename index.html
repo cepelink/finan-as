@@ -65,7 +65,10 @@ input,select{background:var(--card);border:1px solid var(--bd);border-radius:8px
   <div class="c vz" style="margin-top:18vh">
     <h1 style="color:var(--tx)">Minhas Finanças</h1>
     <p>Entre para guardar e sincronizar seus dados entre o celular e o PC.</p>
-    <button class="p" id="entrar">Entrar com Google</button>
+    <input id="usuario" type="text" placeholder="Usuário" autocomplete="username" autocapitalize="none" spellcheck="false" style="margin-bottom:8px">
+    <input id="senha" type="password" placeholder="Senha (mínimo 6 caracteres)" autocomplete="current-password" style="margin-bottom:10px">
+    <div class="l" style="justify-content:center"><button class="p" id="entrar">Entrar</button><button id="criar">Criar conta</button></div>
+    <p style="font-size:12px;margin:4px 0">Não usa e-mail: se esquecer a senha, não dá para recuperar. Use Exportar backup de vez em quando.</p>
     <p id="erro" class="neg"></p>
   </div>
 </div>
@@ -107,7 +110,7 @@ input,select{background:var(--card);border:1px solid var(--bd);border-radius:8px
 
 <script type="module">
 import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-import {getAuth,onAuthStateChanged,signInWithPopup,GoogleAuthProvider,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getAuth,onAuthStateChanged,createUserWithEmailAndPassword,signInWithEmailAndPassword,signOut} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
 import {initializeFirestore,getFirestore,persistentLocalCache,persistentMultipleTabManager,collection,doc,setDoc,updateDoc,deleteDoc,onSnapshot,writeBatch} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
 
 // COLE AQUI a configuração do seu app web (Firebase > Configurações do projeto > Seus apps)
@@ -246,10 +249,30 @@ try{db=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:pers
   };
 
   $("data").value=hoje.getFullYear()+"-"+String(hoje.getMonth()+1).padStart(2,"0")+"-"+String(hoje.getDate()).padStart(2,"0");
-  $("entrar").onclick=function(){
+  function msg(e){
+    var c=(e&&e.code)||"",m={
+      "auth/missing-password":"Digite a senha.",
+      "auth/weak-password":"Senha fraca: use pelo menos 6 caracteres.",
+      "auth/email-already-in-use":"Esse usuário já existe. Use Entrar.",
+      "auth/invalid-credential":"Usuário ou senha incorretos.",
+      "auth/user-not-found":"Usuário ou senha incorretos.",
+      "auth/wrong-password":"Usuário ou senha incorretos.",
+      "auth/too-many-requests":"Muitas tentativas. Espere um pouco e tente de novo.",
+      "auth/network-request-failed":"Sem conexão com a internet.",
+      "auth/operation-not-allowed":"Falta ativar E-mail/senha no Firebase (Authentication > Sign-in method).",
+      "auth/admin-restricted-operation":"A criação de novos usuários está desativada."
+    };
+    return m[c]||("Erro: "+(c||e));
+  }
+  function acao(fn){
     $("erro").textContent="";
-    signInWithPopup(auth,new GoogleAuthProvider()).catch(function(e){$("erro").textContent="Não foi possível entrar: "+(e.code||e)});
-  };
+    var u=$("usuario").value.trim().toLowerCase();
+    if(!/^[a-z0-9._-]{3,30}$/.test(u)){$("erro").textContent="Usuário: 3 a 30 caracteres, só letras, números, ponto, hífen ou _.";return}
+    fn(auth,u+"@financas.app",$("senha").value).catch(function(e){$("erro").textContent=msg(e)});
+  }
+  $("entrar").onclick=function(){acao(signInWithEmailAndPassword)};
+  $("criar").onclick=function(){acao(createUserWithEmailAndPassword)};
+  $("senha").addEventListener("keydown",function(e){if(e.key==="Enter")$("entrar").click()});
   $("sair").onclick=function(){signOut(auth)};
   if(firebaseConfig.apiKey.indexOf("COLE")===0){
     $("login").hidden=false;$("erro").textContent="Falta colar o firebaseConfig no início do script do index.html.";
@@ -258,7 +281,7 @@ try{db=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:pers
       if(unsub){unsub();unsub=null}
       if(u){
         uid=u.uid;col=collection(db,"users",uid,"lancamentos");
-        $("quem").textContent=u.email||"";
+        $("quem").textContent=(u.email||"").split("@")[0];
         $("login").hidden=true;$("app").hidden=false;
         unsub=onSnapshot(col,function(sn){
           itens=sn.docs.map(function(d){return d.data()}).filter(valido);render();
