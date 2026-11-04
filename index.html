@@ -58,6 +58,7 @@ input,select{background:var(--card);border:1px solid var(--bd);border-radius:8px
 .lg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px}
 .tp{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd)}
 .tp:last-child{border:none}
+.c b,.c i{display:block}
 </style>
 </head>
 <body>
@@ -67,7 +68,7 @@ input,select{background:var(--card);border:1px solid var(--bd);border-radius:8px
     <p>Entre para guardar e sincronizar seus dados entre o celular e o PC.</p>
     <input id="usuario" type="text" placeholder="Usuário" autocomplete="username" autocapitalize="none" spellcheck="false" style="margin-bottom:8px">
     <input id="senha" type="password" placeholder="Senha (mínimo 6 caracteres)" autocomplete="current-password" style="margin-bottom:10px">
-    <div class="l" style="justify-content:center"><button class="p" id="entrar">Entrar</button><button id="criar">Criar conta</button></div>
+    <div class="l" style="justify-content:center"><button class="p" id="entrar">Entrar</button><button id="criar">Criar conta</button><button class="inst" hidden>Instalar app</button></div>
     <p style="font-size:12px;margin:4px 0">Não usa e-mail: se esquecer a senha, não dá para recuperar. Use Exportar backup de vez em quando.</p>
     <p id="erro" class="neg"></p>
   </div>
@@ -103,6 +104,7 @@ input,select{background:var(--card);border:1px solid var(--bd);border-radius:8px
     <button id="exp">Exportar backup</button>
     <button id="imp">Importar backup</button>
     <button id="sair">Sair</button>
+    <button class="inst" hidden>Instalar app</button>
     <span id="quem" style="color:var(--mut);align-self:center;font-size:13px"></span>
     <input id="file" type="file" accept="application/json" hidden>
   </div>
@@ -293,6 +295,19 @@ try{db=initializeFirestore(app,{localCache:persistentLocalCache({tabManager:pers
       }
     });
   }
+  var evInst=null,ios=/iphone|ipad|ipod/i.test(navigator.userAgent),
+      jaApp=(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)||navigator.standalone;
+  function mostrarInst(v){Array.prototype.forEach.call(document.querySelectorAll(".inst"),function(b){b.hidden=!v})}
+  window.addEventListener("beforeinstallprompt",function(e){e.preventDefault();evInst=e;if(!jaApp)mostrarInst(true)});
+  window.addEventListener("appinstalled",function(){evInst=null;mostrarInst(false)});
+  if(ios&&!jaApp)mostrarInst(true);
+  Array.prototype.forEach.call(document.querySelectorAll(".inst"),function(b){
+    b.onclick=function(){
+      if(evInst){evInst.prompt();evInst.userChoice.then(function(){evInst=null;mostrarInst(false)})}
+      else if(ios){alert("No iPhone/iPad: toque em Compartilhar (quadrado com seta, no Safari) e escolha Adicionar à Tela de Início.")}
+      else{alert("Abra o menu do navegador e escolha Instalar app ou Adicionar à tela inicial.")}
+    };
+  });
   if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){})})}
 })();
 </script>
